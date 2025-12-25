@@ -1,77 +1,79 @@
 import os
-import cv2
 import numpy as np
 import pandas as pd
+from PIL import Image
 from tqdm import tqdm
 
 import torch
 from torchvision import models, transforms
 
-# Paths
-INPUT_FOLDER = "../data/processed"  # περιέχει subfolders ανά subject
-EMB_PATH = "X.npy"
-META_PATH = "meta.csv"
+# -------------------------
+# Config
+# -------------------------
+DATA_DIR = "../data/processed"
+OUT_DIR = "../data/embeddings"
+OUT_DIR = os.path.abspath(OUT_DIR)
 
-# Device
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+os.makedirs(OUT_DIR, exist_ok=True)
 
-# CNN model (ResNet18 χωρίς το classification layer)
-def get_cnn_model(device=DEVICE):
-    model = models.resnet18(pretrained=True)
-    model = torch.nn.Sequential(*(list(model.children())[:-1]))  # αφαιρούμε τον classifier
-    model.to(device).eval()
-    return model
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Προεπεξεργασία εικόνων για ResNet
-preprocess_transform = transforms.Compose([
-    transforms.ToPILImage(),
-    transforms.Resize((224,224)),
+# -------------------------
+# Model
+# -------------------------
+model = models.resnet18(pretrained=True)
+model = torch.nn.Sequential(*list(model.children())[:-1])  # remove classifier
+model.to(DEVICE)
+model.eval()
+
+# -------------------------
+# Preprocessing
+# -------------------------
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),
     transforms.ToTensor(),
-    transforms.Normalize([0.485,0.485,0.485],[0.229,0.229,0.229])
+    transforms.Normalize(
+        mean=[0.485, 0.485, 0.485],
+        std=[0.229, 0.229, 0.229]
+    )
 ])
 
-# Εξαγωγή embedding
-def extract_embedding(img_gray, model, device=DEVICE):
-    if len(img_gray.shape)==2:  # grayscale -> RGB
-        img = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2BGR)
-    else:
-        img = img_gray
-    x = preprocess_transform(img).unsqueeze(0).to(device)
-    with torch.no_grad():
-        emb = model(x).squeeze().cpu().numpy()
-    return emb
-
-# Εκτέλεση pipeline
+# -------------------------
+# Embedding extraction
+# -------------------------
 X = []
 meta = []
 
-subjects = sorted([d for d in os.listdir(INPUT_FOLDER) if os.path.isdir(os.path.join(INPUT_FOLDER,d))])
-print("Subjects found:", subjects)
+subjects = sorted(os.listdir(DATA_DIR))
 
 for subject in subjects:
-    subj_dir = os.path.join(INPUT_FOLDER, subject)
-    images = sorted([f for f in os.listdir(subj_dir) if f.lower().endswith(('.png','.jpg','.jpeg','.tif'))])
-    if not images:
-        print(f"No images found for {subject}, skipping...")
+    subject_path = os.path.join(DATA_DIR, subject)
+    if not os.path.isdir(subject_path):
         continue
 
-    for fname in tqdm(images, desc=f"Subject {subject}"):
-        path = os.path.join(subj_dir, fname)
-        img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-        if img is None:
-            print(f"Could not read {path}, skipping...")
-            continue
-        emb = extract_embedding(img, get_cnn_model())
+    images = sorted(os.listdir(subject_path))
+
+    for img_name in tqdm(images, desc=f"{subject}"):
+        img_path = os.path.join(subject_path, img_name)
+
+        img = Image.open(img_path).convert("RGB")
+        x = transform(img).unsqueeze(0).to(DEVICE)
+
+        with torch.no_grad():
+            emb = model(x).squeeze().cpu().numpy()
+
         X.append(emb)
-        meta.append({'filename': path, 'subject': subject})
+        meta.append({
+            "subject": subject,
+            "filename": img_name
+        })
 
-if not X:
-    raise ValueError("No embeddings were extracted! Check your folders and image files.")
-
-# Αποθήκευση embeddings και metadata
+# -------------------------
+# Save outputs
+# -------------------------
 X = np.stack(X)
-np.save(EMB_PATH, X)
-pd.DataFrame(meta).to_csv(META_PATH, index=False)
+np.save(os.path.join(OUT_DIR, "X.npy"), X)
+pd.DataFrame(meta).to_csv(os.path.join(OUT_DIR, "meta.csv"), index=False)
 
-print(f"Saved {len(X)} embeddings to {EMB_PATH}")
-print(f"Saved metadata to {META_PATH}")
+print("Embeddings saved.")
+print("X shape:", X.shape)
