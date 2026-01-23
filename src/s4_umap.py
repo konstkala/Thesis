@@ -28,7 +28,8 @@ reducer = umap.UMAP(
     min_dist=0.1,
     n_components=2,
     metric="euclidean",
-    random_state=42
+    random_state=42,
+    n_jobs=1
 )
 
 X_umap = reducer.fit_transform(X)

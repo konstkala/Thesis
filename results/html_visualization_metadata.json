@@ -1,0 +1,23 @@
+{
+  "file": "..\\data\\mapper\\mapper.html",
+  "analysis": {
+    "nodes_detected": 25,
+    "edges_detected": 0,
+    "features": [
+      "\u2713 Hover tooltips enabled",
+      "\u2713 Click interactions available",
+      "\u2713 Zoom/Pan capabilities",
+      "\u2713 Color-coded visualization"
+    ],
+    "visualization_type": "KeplerMapper - Topological Data Analysis",
+    "lens": "UMAP 2D projection",
+    "clustering_method": "DBSCAN"
+  },
+  "interpretation": {
+    "what_it_shows": "How fingerprint embeddings organize topologically in the feature space",
+    "node_meaning": "A cluster of fingerprints in a local region of embedding space",
+    "edge_meaning": "Topological connectivity between clusters (persistence)",
+    "color_meaning": "Different subjects/clusters for identification",
+    "size_meaning": "Number of samples in each topological region"
+  }
+}
